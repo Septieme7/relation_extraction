@@ -127,4 +127,9 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# own
 .DS_Store
+.vscode
+saved_models/
+pretrained_models/

@@ -55,6 +55,7 @@ def test_json(hparams):
         for i, line in enumerate(lines):
             j = json.loads(line)
             j['relation'] = predict_result[i]
-            out.write(str(j) + '\n')
+            j = json.dumps(j, ensure_ascii=False)
+            out.write(j + '\n')
 
     out.close()

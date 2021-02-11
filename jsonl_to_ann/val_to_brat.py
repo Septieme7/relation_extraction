@@ -32,14 +32,18 @@ def getallname():
 
 def if_split(p1, p2, text):
     '''
-    判断实体1与实体2之间是否有句号
+    判断实体1与实体2之间有几个换行符
     :param p1:
     :param p2:
     :param text:
     :return:
     '''
-    result = '。' in text[p1:p2]
-    return result
+    count = 0
+    for i in range(p1,p2):
+        if text[i] == '\n':
+            count += 1
+
+    return count
 
 def find_end(p, artical):
     '''
@@ -122,6 +126,45 @@ if __name__ == '__main__':
             type_list.append(t1_type[i])
             type_list.append(t2_type[i])
 
+        # 遍历known生成实体------
+        # t1包含第一个实体
+        r_text = know_data.iloc[:, -1]
+
+        r_t1 = know_data.iloc[:, 2]
+        r_t1_pos_head = know_data.iloc[:, 4]
+        r_t1_type = know_data.iloc[:, 7]
+        for i in range(len(r_t1)):
+            r_t1[i] = r_t1[i][:-1]
+            r_t1_pos_head[i] = int(r_t1_pos_head[i][1:-1])
+            r_t1_type[i] = r_t1_type[i][:-2]
+            r_text[i] = r_text[i][:-1]
+
+        # t2包含第二个实体
+        r_t2 = know_data.iloc[:, 10]
+        r_t2_pos_head = know_data.iloc[:, 12]
+        r_t2_type = know_data.iloc[:, 15]
+        for i in range(len(r_t2)):
+            r_t2[i] = r_t2[i][:-1]
+            r_t2_type[i] = r_t2_type[i][:-2]
+            r_t2_pos_head[i] = int(r_t2_pos_head[i][1:-1])
+
+        for i in range(1, len(r_t2)):
+            if r_text[i] != r_text[i - 1]:
+                # 每次窗口滑动，更新total_len的值，每次更新的值为text起始位置在原文的位置
+                match = re.search(r_text[i], artical)
+                total_len = match.start()
+
+            text1 = r_text[i]
+            t_list.append(r_t1[i])
+            t_list.append(r_t2[i])
+
+            h_list.append(r_t1_pos_head[i] + total_len)
+            h_list.append(r_t2_pos_head[i] + total_len)
+
+            type_list.append(r_t1_type[i])
+            type_list.append(r_t2_type[i])
+
+
         '''        t_h_df = pd.DataFrame(columns=['t', 'head'])
                 t_list = []
                 h_list = []'''
@@ -136,7 +179,7 @@ if __name__ == '__main__':
         # 重置索引
         t_h_df = t_h_df.reset_index(drop=True)
         print("实体列表")
-        print(t_h_df)
+        print(t_h_df[:10])
 
         # 下面进行关系的标注
 
@@ -148,23 +191,7 @@ if __name__ == '__main__':
         for i in range(len(r)):
             r[i] = r[i][:-1]
 
-        # t1包含第一个实体
-        r_text = know_data.iloc[:, -1]
 
-        r_t1 = know_data.iloc[:, 2]
-        r_t1_pos_head = know_data.iloc[:, 4]
-        for i in range(len(r_t1)):
-            r_t1[i] = r_t1[i][:-1]
-            r_t1_pos_head[i] = int(r_t1_pos_head[i][1:-1])
-            r_text[i] = r_text[i][:-1]
-
-        # t2包含第二个实体
-        r_t2 = know_data.iloc[:, 10]
-        r_t2_pos_head = know_data.iloc[:, 12]
-
-        for i in range(len(r_t2)):
-            r_t2[i] = r_t2[i][:-1]
-            r_t2_pos_head[i] = int(r_t2_pos_head[i][1:-1])
 
         r_h_df = pd.DataFrame(columns=['head1', 'head2', 'relation'])
         # 遍历known，生成实体与关系
@@ -189,8 +216,11 @@ if __name__ == '__main__':
         print(r_h_df)
 
         # 初始化关系计数R, 用于关系的迭代
-        r_count = 0
+        # r_count = 0
         output_name = "./result_brat/" + artical_name[file_count] + '.ann'
+        n_ = 1
+
+
         with open(output_name, "w+", encoding="utf-8") as f:
             for i in range(len(t_h_df)):
                 t_index_ = 'T' + str(i + 1)
@@ -198,9 +228,9 @@ if __name__ == '__main__':
                 f.write("\t")
                 f.write(t_h_df['type'][i])
                 f.write(" ")
-                f.write(str(t_h_df['head'][i]))
+                f.write(str(t_h_df['head'][i] + n_))
                 f.write(' ')
-                end_ = t_h_df['head'][i] + len(t_h_df['t'][i])
+                end_ = t_h_df['head'][i] + len(t_h_df['t'][i]) + n_
                 f.write(str(end_))
                 f.write("\t")
                 f.write(t_h_df['t'][i])
@@ -210,50 +240,39 @@ if __name__ == '__main__':
                 # 查找距离该实体位置最近的句号位置
                 p_ = t_h_df['head'][i]
 
-                near_end_ = find_end(p_, artical)
+
+                # 寻找第i个实体和第i+1个实体之间有几个换行符
+                flag = 0
+                if i != (len(t_h_df) - 1):
+                    p1 = t_h_df['head'][i]
+                    p2 = t_h_df['head'][i + 1]
+                    # p3 = len(t_h_df[t_h_df['head'] == p2].iloc[0,0]) + p2
+                    flag = if_split(p1, p2, artical)
+                    if flag >= 1:
+                        n_ += flag
+
+
+        with open(output_name, "a+", encoding="utf-8") as f:
+            for r_count in range(len(r_h_df)-1):
+                r_index_ = 'R' + str(r_count + 1)
+                f.write(r_index_)
+                f.write("\t")
+
+                f.write(r_h_df['relation'][r_count])
+                f.write(" ")
+                arg1 = 'Arg1:'
+                temp = t_h_df[t_h_df['head'] == r_h_df['head1'][r_count]].index.values[0] + 1
+                str_temp = 'T' + str(temp)
+                arg1 = arg1 + str_temp
+
+                f.write(arg1)
+                f.write(' ')
+                arg2 = 'Arg2:'
+                temp2 = t_h_df[t_h_df['head'] == r_h_df['head2'][r_count]].index.values[0] + 1
+                str_temp2 = 'T' + str(temp2)
+                arg2 = arg2 + str_temp2
+                f.write(arg2)
+
+                f.write("\n")
+                r_count += 1
                 r_head_ = max(r_h_df['head1'][r_count], r_h_df['head2'][r_count])
-
-                # 如果当前实体的最近句号的位置，已经大于关系列表中靠后的实体的位置，说明在这一行结束需要插入关系
-                if near_end_ >= r_head_:
-
-                    # 寻找第i个实体和第i+1个实体之间，是否有句号
-                    flag = 0
-                    if i != (len(t_h_df) - 1):
-                        p1 = t_h_df['head'][i]
-                        p2 = t_h_df['head'][i + 1]
-                        # p3 = len(t_h_df[t_h_df['head'] == p2].iloc[0,0]) + p2
-                        if if_split(p1, p2, artical):
-                            flag = 1
-                    # 如果两个实体之间存在句号，则说明要换行，每当换行时，标一次关系
-                    if flag == 1:
-                        while r_head_ <= near_end_:
-                            if r_count >= (len(r_h_df) - 1):
-                                break
-                            r_index_ = 'R' + str(r_count + 1)
-                            f.write(r_index_)
-                            f.write("\t")
-
-                            f.write(r_h_df['relation'][r_count])
-                            f.write(" ")
-                            arg1 = 'Arg1:'
-                            temp = t_h_df[t_h_df['head'] == r_h_df['head1'][r_count]].index.values[0] + 1
-                            str_temp = 'T' + str(temp)
-                            arg1 = arg1 + str_temp
-
-                            f.write(arg1)
-                            f.write(' ')
-                            arg2 = 'Arg2:'
-                            temp2 = t_h_df[t_h_df['head'] == r_h_df['head2'][r_count]].index.values[0] + 1
-                            str_temp2 = 'T' + str(temp2)
-                            arg2 = arg2 + str_temp2
-                            f.write(arg2)
-
-                            f.write("\n")
-                            r_count += 1
-                            r_head_ = max(r_h_df['head1'][r_count], r_h_df['head2'][r_count])
-
-
-
-
-
-
